@@ -145,3 +145,103 @@ double OwenQ1(int nu, double t, double delta, double R){
     return C + 2*sum.convert_to<double>();
   }
 }
+
+mp::float128 dnorm_mp(mp::float128 x){
+  return mp::exp(-x*x/2)/2.5066282746310005024157652848110452530069867406099Q;
+}
+mp::float128 dnorm_mp(mp::float128 x); 
+// [[Rcpp::export]]
+double powen4(int nu, double t1, double t2, double delta1, double delta2){
+  double C;
+  if(nu % 2 == 1){
+    const double a1 = R::sign(t1)*sqrt(t1*t1/nu);
+    const double b1 = nu/(nu+t1*t1);
+    const double sB1 = sqrt(b1);
+    const double ab1 = a1*b1;
+    const double asB1 = R::sign(t1)*sqrt(t1*t1/(nu+t1*t1));
+    const double a2 = R::sign(t2)*sqrt(t2*t2/nu);
+    const double b2 = nu/(nu+t2*t2);
+    const double sB2 = sqrt(b2);
+    const double ab2 = a2*b2;
+    const double asB2 = R::sign(t2)*sqrt(t2*t2/(nu+t2*t2));
+    const double R = sqrt(nu)*(delta1 - delta2)/(t1-t2);
+    C = (delta1>=0) - (delta2>=0) + 
+      2*(sf::owens_t(delta2 *sB2, a2) -
+          sf::owens_t(delta1 *sB1, a1) -
+          sf::owens_t(R , (a2*R -delta2 )/R ) +
+          sf::owens_t(R , (a1*R -delta1 )/R ) -
+          sf::owens_t(delta2 *sB2, (delta2 *ab2-R )/b2/delta2) +
+          sf::owens_t(delta1 *sB1, (delta1 *ab1-R )/b1/delta1) );
+    if(nu == 1){
+      return C;
+    }
+  }
+  const mp::float128 a1(R::sign(t1)*sqrt(t1*t1/nu));
+  const mp::float128 b1(nu/(nu+t1*t1));
+  const mp::float128 sB1(sqrt(b1));
+  const mp::float128 ab1(a1*b1);
+  const mp::float128 asB1(R::sign(t1)*sqrt(t1*t1/(nu+t1*t1)));
+  const mp::float128 a2(R::sign(t2)*sqrt(t2*t2/nu));
+  const mp::float128 b2(nu/(nu+t2*t2));
+  const mp::float128 sB2(sqrt(b2));
+  const mp::float128 ab2(a2*b2);
+  const mp::float128 asB2(R::sign(t2)*sqrt(t2*t2/(nu+t2*t2)));
+  const mp::float128 R(sqrt(nu)*(delta1 - delta2)/(t1-t2));
+  const int n = nu-1;
+  std::vector<mp::float128> H(n);
+  std::vector<mp::float128> M1(n);
+  std::vector<mp::float128> M2(n);
+  H[0] = -dnorm_mp(R) * (pnorm_mp(a2*R-delta2) - pnorm_mp(a1*R-delta1));
+  M1[0] = asB1*dnorm_mp(delta1*sB1)*(pnorm_mp(delta1*asB1)-pnorm_mp((delta1*ab1-R)/sB1));
+  M2[0] = asB2*dnorm_mp(delta2*sB2)*(pnorm_mp(delta2*asB2)-pnorm_mp((delta2*ab2-R)/sB2));
+  if(nu >= 3){
+    H[1] = R * H[0];
+    M1[1] = delta1*ab1*M1[0] +
+      ab1*dnorm_mp(delta1*sB1)*(dnorm_mp(delta1*asB1)-dnorm_mp((delta1*ab1-R)/sB1));
+    M2[1] = delta2*ab2*M2[0] +
+      ab2*dnorm_mp(delta2*sB2)*(dnorm_mp(delta2*asB2)-dnorm_mp((delta2*ab2-R)/sB2));
+    if(nu >= 4){
+      std::vector<mp::float128> A(n);
+      std::vector<mp::float128> L1(n-2);
+      std::vector<mp::float128> L2(n-2);
+      A[0] = 1;
+      A[1] = 1;
+      L1[0] = ab1 * R * dnorm_mp(R) * dnorm_mp(a1*R-delta1) / 2;
+      L2[0] = ab2 * R * dnorm_mp(R) * dnorm_mp(a2*R-delta2) / 2;
+      int k;
+      for(k=2; k<n; k++){
+        A[k] = 1.0/k/A[k-1];
+      }
+      if(nu >= 5){
+        for(k=1; k<n-2; k++){
+          L1[k] = A[k+2] * R * L1[k-1];
+          L2[k] = A[k+2] * R * L2[k-1];
+        }
+      }
+      for(k=2; k<n; k++){
+        H[k] = A[k] * R * H[k-1];
+        M1[k] = (k-1.0)/k *
+          (A[k-2] * delta1 * ab1 * M1[k-1] + b1*M1[k-2]) - L1[k-2];
+        M2[k] = (k-1.0)/k *
+          (A[k-2] * delta2 * ab2 * M2[k-1] + b2*M2[k-2]) - L2[k-2];
+      }
+    }
+  }
+  if(nu % 2 == 0){
+    const mp::float128 sqrt2pi = 2.5066282746310005024157652848110452530069867406099Q;
+    mp::float128 sum;
+    int i;
+    for(i=0; i<nu-1; i+=2){
+      sum += M2[i]-M1[i]+H[i];
+    }
+    mp::float128 res = pnorm_mp(-delta2) - pnorm_mp(-delta1) + sqrt2pi * sum;
+    return res.convert_to<double>();
+  }else{
+    mp::float128 sum;
+    int i;
+    for(i=1; i<nu-1; i+=2){
+      sum += M2[i]-M1[i]+H[i];
+    }
+    return C+2*sum.convert_to<double>();
+  }
+}

@@ -32,10 +32,26 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// powen4
+double powen4(int nu, double t1, double t2, double delta1, double delta2);
+RcppExport SEXP _OwenQ128_powen4(SEXP nuSEXP, SEXP t1SEXP, SEXP t2SEXP, SEXP delta1SEXP, SEXP delta2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type nu(nuSEXP);
+    Rcpp::traits::input_parameter< double >::type t1(t1SEXP);
+    Rcpp::traits::input_parameter< double >::type t2(t2SEXP);
+    Rcpp::traits::input_parameter< double >::type delta1(delta1SEXP);
+    Rcpp::traits::input_parameter< double >::type delta2(delta2SEXP);
+    rcpp_result_gen = Rcpp::wrap(powen4(nu, t1, t2, delta1, delta2));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_OwenQ128_ptowen", (DL_FUNC) &_OwenQ128_ptowen, 3},
     {"_OwenQ128_OwenQ1", (DL_FUNC) &_OwenQ128_OwenQ1, 4},
+    {"_OwenQ128_powen4", (DL_FUNC) &_OwenQ128_powen4, 5},
     {NULL, NULL, 0}
 };
 

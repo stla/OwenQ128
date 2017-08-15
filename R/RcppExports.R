@@ -9,3 +9,7 @@ OwenQ1 <- function(nu, t, delta, R) {
     .Call(`_OwenQ128_OwenQ1`, nu, t, delta, R)
 }
 
+powen4 <- function(nu, t1, t2, delta1, delta2) {
+    .Call(`_OwenQ128_powen4`, nu, t1, t2, delta1, delta2)
+}
+
