@@ -4,9 +4,92 @@
 #include <boost/math/special_functions/erf.hpp>
 #include <boost/math/special_functions/owens_t.hpp>
 #include <cmath>
+#include <boost/math/distributions/non_central_t.hpp>
 
 namespace mp = boost::multiprecision;
 namespace sf = boost::math;
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+double pt_boost(double q, double nu, double delta){
+  return boost::math::cdf(boost::math::non_central_t(nu, delta), q);
+}
+
+// [[Rcpp::export]]
+NumericVector vecstudent(double q, int nu, NumericVector delta){
+  const double a = R::sign(q)*sqrt(q*q/nu);
+  const double b = nu/(nu+q*q);
+  const int J = delta.size();
+  if(nu==1){
+    NumericVector C = pnorm(-delta*sqrt(b));
+    int i;
+    for(i=0; i<J; i++){
+      C[i] += 2*sf::owens_t(delta[i] * sqrt(b), a);
+    }
+    return C;
+  }
+  std::vector<double> dsB(J); 
+  int j;
+  for(j=0; j<J; j++){
+    dsB[j] = delta[j] * sqrt(b);
+  }
+  std::vector< std::vector<double> > M(nu-1, std::vector<double>(J));
+  for(j=0; j<J ; j++){
+    M[0][j] = a * sqrt(b) * R::dnorm(dsB[j], 0.0, 1.0, 0) * R::pnorm(a*dsB[j], 0.0, 1.0, 1, 0);
+  }
+  const double sqrt2pi = 2.506628274631000502415765284811;
+  if(nu>2){
+    for(j=0; j<J; j++){
+      M[1][j] = b * (delta[j] * a * M[0][j] + a * R::dnorm(delta[j], 0.0, 1.0, 0) / sqrt2pi);
+    }
+    if(nu>3){
+      std::vector<double> A(nu-3);
+      A[0] = 1.0;
+      int k;
+      if(nu>4){
+        for(k=1; k<nu-3; k++){
+          A[k] = 1.0/k/A[k-1];
+        }
+      }
+      for(k=2; k<nu-1; k++){
+        for(j=0; j<J; j++){
+          M[k][j] = (k-1) * b * (A[k-2] * delta[j] * a * M[k-1][j] + M[k-2][j]) / k;
+        }
+      }
+    }
+  }
+  int i;
+  if(nu%2==1){
+    NumericVector C = pnorm(-delta*sqrt(b));
+    int i;
+    for(i=0; i<J; i++){
+      C[i] += 2*sf::owens_t(dsB[i], a);
+    }
+    std::vector<double> sum(J);
+    for(i=1; i<nu-1; i+=2){
+      for(j=0; j<J; j++){
+        sum[j] += M[i][j];
+      }
+    }
+    NumericVector out(J);
+    for(j=0; j<J; j++){
+      out[j] = C[j] + 2*sum[j];
+    }
+    return out;
+  }
+  std::vector<double> sum(J);
+  for(i=0; i<nu-1; i+=2){
+    for(j=0; j<J; j++){
+      sum[j] += M[i][j];
+    }
+  }
+  NumericVector out(J);
+  for(j=0; j<J; j++){
+    out[j] = R::pnorm(-delta[j], 0.0, 1.0, 1, 0) + sqrt2pi*sum[j];
+  }
+  return out;
+}
+
 
 mp::float128 pnorm_mp(mp::float128 x){
   const mp::float128 sqrt2 = 1.4142135623730950488016887242096980785696718753769Q;
