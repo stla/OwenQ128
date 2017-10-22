@@ -102,6 +102,7 @@ NumericVector isPositive(NumericVector x){
 }
 NumericVector isPositive(NumericVector x);
 
+// [[Rcpp::export]]
 NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
   const double a = R::sign(t)*sqrt(t*t/nu);
   const double b = nu/(nu+t*t);
@@ -151,7 +152,7 @@ NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
   if(nu >= 3){
     for(j=0; j<J; j++){
       H[1][j] = R[j] * H[0][j];
-      M[1][j] = delta[j]*ab*M[0,j] + ab * dnormdsB[j] * (R::dnorm(dsB[j]*a, 0.0, 1.0, 0) - R::dnorm(dabminusRoversB[j], 0.0, 1.0, 0));
+      M[1][j] = delta[j]*ab*M[0][j] + ab * dnormdsB[j] * (R::dnorm(dsB[j]*a, 0.0, 1.0, 0) - R::dnorm(dabminusRoversB[j], 0.0, 1.0, 0));
     }
     if(nu >= 4){
       std::vector<double> A(n);
@@ -159,7 +160,7 @@ NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
       A[0] = 1;
       A[1] = 1;
       for(j=0; j<J; j++){
-        L[0][j] = ab * R[j] * dnormR[j] * R::dnorm(a*R[j]-delta[j], 0.0, 1.0, 1)/2;
+        L[0][j] = ab * R[j] * dnormR[j] * R::dnorm(a*R[j]-delta[j], 0.0, 1.0, 0)/2;
       }
       int k;
       for(k=2; k<n; k++){
@@ -196,6 +197,7 @@ NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
     return out;
   }else{
     std::vector<double> sum(J);
+    int i;
     for(i=1; i<n; i+=2){
       for(j=0; j<J; j++){
         sum[j] += M[i][j]+H[i][j];
@@ -203,7 +205,7 @@ NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
     }
     NumericVector out(J);
     NumericVector C = pnorm(R) - isPositive(delta);
-    for(j=0; i<J; j++){
+    for(j=0; j<J; j++){
       double C1 =
         sf::owens_t(dsB[j], a);
       double C2 =
