@@ -11,9 +11,27 @@ namespace sf = boost::math;
 using namespace Rcpp;
 
 // [[Rcpp::export]]
+double test128(double x){
+  mp::float128 x_mp(x);
+  mp::float128 y = mp::sqrt(x_mp);
+  return y.convert_to<double>();
+}
+
+// [[Rcpp::export]]
 double pt_boost(double q, double nu, double delta){
   return boost::math::cdf(boost::math::non_central_t(nu, delta), q);
 }
+
+mp::float128 dnorm_mp(mp::float128 x){
+  return mp::exp(-x*x/2)/2.5066282746310005024157652848110452530069867406099Q;
+}
+mp::float128 dnorm_mp(mp::float128 x); 
+
+mp::float128 pnorm_mp(mp::float128 x){
+  const mp::float128 sqrt2 = 1.4142135623730950488016887242096980785696718753769Q;
+  return sf::erfc(-x / sqrt2)/2;
+}
+mp::float128 pnorm_mp(mp::float128 x);
 
 // [[Rcpp::export]]
 NumericVector vecstudent(double q, int nu, NumericVector delta){
@@ -87,6 +105,87 @@ NumericVector vecstudent(double q, int nu, NumericVector delta){
   NumericVector out(J);
   for(j=0; j<J; j++){
     out[j] = R::pnorm(-delta[j], 0.0, 1.0, 1, 0) + sqrt2pi*sum[j];
+  }
+  return out;
+}
+
+// [[Rcpp::export]]
+NumericVector vecstudent128(double q, int nu, NumericVector delta){
+  const int J = delta.size();
+  if(nu==1){
+    const double a = R::sign(q)*sqrt(q*q/nu);
+    const double sB = sqrt(nu/(nu+q*q));
+    NumericVector C = pnorm(-delta*sB);
+    int j;
+    for(j=0; j<J; j++){
+      C[j] += 2*sf::owens_t(delta[j] * sB, a);
+    }
+    return C;
+  }
+  const mp::float128 q2_mp(q*q);
+  const mp::float128 a_mp = R::sign(q)*mp::sqrt(q2_mp/nu);
+  const mp::float128 b_mp = nu/(nu+q2_mp);
+  const mp::float128 sB_mp = mp::sqrt(b_mp);
+  std::vector<mp::float128> dsB(J); 
+  int j;
+  for(j=0; j<J; j++){
+    dsB[j] = delta[j] * sB_mp;
+  }
+  std::vector< std::vector<mp::float128> > M(nu-1, std::vector<mp::float128>(J));
+  for(j=0; j<J ; j++){
+    M[0][j] = a_mp * sB_mp * dnorm_mp(dsB[j]) * pnorm_mp(a_mp*dsB[j]);
+  }
+  const mp::float128 sqrt2pi = 2.5066282746310005024157652848110452530069867406099Q;
+  if(nu>2){
+    for(j=0; j<J; j++){
+      M[1][j] = b_mp * (delta[j] * a_mp * M[0][j] + a_mp * dnorm_mp(delta[j]) / sqrt2pi);
+    }
+    if(nu>3){
+      std::vector<mp::float128> A(nu-3);
+      A[0] = 1.0;
+      int k;
+      if(nu>4){
+        for(k=1; k<nu-3; k++){
+          A[k] = 1.0/k/A[k-1];
+        }
+      }
+      for(k=2; k<nu-1; k++){
+        for(j=0; j<J; j++){
+          M[k][j] = (k-1) * b_mp * (A[k-2] * delta[j] * a_mp * M[k-1][j] + M[k-2][j]) / k;
+        }
+      }
+    }
+  }
+  if(nu%2==1){
+    const double a = R::sign(q)*sqrt(q*q/nu);
+    const double sB = sqrt(nu/(nu+q*q));
+    NumericVector C = pnorm(-delta*sB);
+    for(j=0; j<J; j++){
+      C[j] += 2*sf::owens_t(delta[j] * sB, a);
+    }
+    std::vector<mp::float128> sum(J);
+    int i;
+    for(i=1; i<nu-1; i+=2){
+      for(j=0; j<J; j++){
+        sum[j] += M[i][j];
+      }
+    }
+    NumericVector out(J);
+    for(j=0; j<J; j++){
+      out[j] = C[j] + 2*sum[j].convert_to<double>();
+    }
+    return out;
+  }
+  int i;
+  std::vector<mp::float128> sum(J);
+  for(i=0; i<nu-1; i+=2){
+    for(j=0; j<J; j++){
+      sum[j] += M[i][j];
+    }
+  }
+  NumericVector out(J);
+  for(j=0; j<J; j++){
+    out[j] = R::pnorm(-delta[j], 0.0, 1.0, 1, 0) + (sqrt2pi*sum[j]).convert_to<double>();
   }
   return out;
 }
@@ -355,11 +454,6 @@ NumericVector vecpowen4(int nu, double t1, double t2, NumericVector delta1,
   }
 }
 
-mp::float128 pnorm_mp(mp::float128 x){
-  const mp::float128 sqrt2 = 1.4142135623730950488016887242096980785696718753769Q;
-  return sf::erfc(-x / sqrt2)/2;
-}
-mp::float128 pnorm_mp(mp::float128 x);
 
 // [[Rcpp::export]]
 double ptowen(double q, int nu, double delta){
@@ -493,10 +587,6 @@ double OwenQ1(int nu, double t, double delta, double R){
   }
 }
 
-mp::float128 dnorm_mp(mp::float128 x){
-  return mp::exp(-x*x/2)/2.5066282746310005024157652848110452530069867406099Q;
-}
-mp::float128 dnorm_mp(mp::float128 x); 
 
 // [[Rcpp::export]]
 double powen4(int nu, double t1, double t2, double delta1, double delta2){
