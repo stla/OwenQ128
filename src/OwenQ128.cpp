@@ -219,6 +219,142 @@ NumericVector vecOwenQ1(int nu, double t, NumericVector delta, NumericVector R){
   }
 }
 
+// [[Rcpp::export]]
+NumericVector vecpowen4(int nu, double t1, double t2, NumericVector delta1,
+  NumericVector delta2){
+  const double a1 = R::sign(t1)*sqrt(t1*t1/nu);
+  const double b1 = nu/(nu+t1*t1);
+  const double sB1 = sqrt(b1);
+  const double ab1 = a1*b1;
+  const double asB1 = R::sign(t1)*sqrt(t1*t1/(nu+t1*t1));
+  const double a2 = R::sign(t2)*sqrt(t2*t2/nu);
+  const double b2 = nu/(nu+t2*t2);
+  const double sB2 = sqrt(b2);
+  const double ab2 = a2*b2;
+  const double asB2 = R::sign(t2)*sqrt(t2*t2/(nu+t2*t2));
+  const int J = delta1.size();
+  std::vector<double> R(J);
+  int j;
+  for(j = 0; j<J; j++){
+    R[j] = sqrt(nu)*(delta1[j] - delta2[j])/(t1-t2);
+  }
+  if(nu==1){
+    NumericVector C = isPositive(delta1) - isPositive(delta2);
+    for(j=0; j<J; j++){
+      double C1 =
+        sf::owens_t(delta2[j]*sB2, a2) - sf::owens_t(delta1[j]*sB1, a1);
+      double C2 =
+        sf::owens_t(R[j], (a2*R[j]-delta2[j])/R[j]) -
+          sf::owens_t(R[j], (a1*R[j]-delta1[j])/R[j]);
+      double C3 =
+        sf::owens_t(delta2[j]*sB2, (delta2[j]*ab2-R[j])/b2/delta2[j]) -
+          sf::owens_t(delta1[j]*sB1, (delta1[j]*ab1-R[j])/b1/delta1[j]);
+      C[j] += 2*(C1 - C2 - C3);
+    }
+    return C;
+  }
+  std::vector<double> dsB1(J); 
+  std::vector<double> dsB2(J); 
+  std::vector<double> dnormdsB1(J); 
+  std::vector<double> dnormdsB2(J); 
+  std::vector<double> dabminusRoversB1(J); 
+  std::vector<double> dabminusRoversB2(J); 
+  std::vector<double> dnormR(J); 
+  for(j=0; j<J; j++){
+    dsB1[j] = delta1[j] * sB1;
+    dsB2[j] = delta2[j] * sB2;
+    dnormdsB1[j] = R::dnorm(dsB1[j], 0.0, 1.0, 0);
+    dnormdsB2[j] = R::dnorm(dsB2[j], 0.0, 1.0, 0);
+    dabminusRoversB1[j] = (delta1[j]*ab1 - R[j])/sB1; 
+    dabminusRoversB2[j] = (delta2[j]*ab2 - R[j])/sB2; 
+    dnormR[j] = R::dnorm(R[j], 0.0, 1.0, 0);
+  }
+  const int n = nu-1;
+  std::vector< std::vector<double> > M1(n, std::vector<double>(J));
+  std::vector< std::vector<double> > M2(n, std::vector<double>(J));
+  std::vector< std::vector<double> > H(n, std::vector<double>(J));
+  for(j=0; j<J; j++){
+    H[0][j] = -dnormR[j] * (R::pnorm(a2*R[j]-delta2[j], 0.0, 1.0, 1, 0) - R::pnorm(a1*R[j]-delta1[j], 0.0, 1.0, 1, 0));
+    M1[0][j] = asB1 * dnormdsB1[j] * (R::pnorm(dsB1[j]*a1, 0.0, 1.0, 1, 0) - R::pnorm(dabminusRoversB1[j], 0.0, 1.0, 1, 0));
+    M2[0][j] = asB2 * dnormdsB2[j] * (R::pnorm(dsB2[j]*a2, 0.0, 1.0, 1, 0) - R::pnorm(dabminusRoversB2[j], 0.0, 1.0, 1, 0));
+  }
+  if(nu >= 3){
+    for(j=0; j<J; j++){
+      H[1][j] = R[j] * H[0][j];
+      M1[1][j] = delta1[j]*ab1*M1[0][j] + ab1 * dnormdsB1[j] * (R::dnorm(dsB1[j]*a1, 0.0, 1.0, 0) - R::dnorm(dabminusRoversB1[j], 0.0, 1.0, 0));
+      M2[1][j] = delta2[j]*ab2*M2[0][j] + ab2 * dnormdsB2[j] * (R::dnorm(dsB2[j]*a2, 0.0, 1.0, 0) - R::dnorm(dabminusRoversB2[j], 0.0, 1.0, 0));
+    }
+    if(nu >= 4){
+      std::vector<double> A(n);
+      std::vector< std::vector<double> > L1(n-2, std::vector<double>(J));
+      std::vector< std::vector<double> > L2(n-2, std::vector<double>(J));
+      A[0] = 1;
+      A[1] = 1;
+      for(j=0; j<J; j++){
+        L1[0][j] = ab1 * R[j] * dnormR[j] * R::dnorm(a1*R[j]-delta1[j], 0.0, 1.0, 0)/2;
+        L2[0][j] = ab2 * R[j] * dnormR[j] * R::dnorm(a2*R[j]-delta2[j], 0.0, 1.0, 0)/2;
+      }
+      int k;
+      for(k=2; k<n; k++){
+        A[k] = 1.0/k/A[k-1];
+      }
+      if(nu >= 5){
+        for(k=1; k<n-2; k++){
+          for(j=0; j<J; j++){
+            L1[k][j] = A[k+2] * R[j] * L1[k-1][j];
+            L2[k][j] = A[k+2] * R[j] * L2[k-1][j];
+          }
+        }
+      }
+      for(k=2; k<n; k++){
+        for(j=0; j<J; j++){
+          H[k][j] = A[k] * R[j] * H[k-1][j];
+          M1[k][j] = (k-1.0)/k * (A[k-2] * delta1[j] * ab1 * M1[k-1][j] + b1*M1[k-2][j]) - L1[k-2][j];
+          M2[k][j] = (k-1.0)/k * (A[k-2] * delta2[j] * ab2 * M2[k-1][j] + b2*M2[k-2][j]) - L2[k-2][j];
+        }
+      }
+    }
+  }
+  if(nu % 2 == 0){
+    const double sqrt2pi = 2.506628274631000502415765284811;
+    int i;
+    std::vector<double> sum(J);
+    for(i=0; i<n; i+=2){
+      for(j=0; j<J; j++){
+        sum[j] += M2[i][j] - M1[i][j] + H[i][j];
+      }
+    }
+    NumericVector out(J);
+    for(j=0; j<J; j++){
+      out[j] = R::pnorm(-delta2[j], 0.0, 1.0, 1, 0) - R::pnorm(-delta1[j], 0.0, 1.0, 1, 0) + sqrt2pi*sum[j];
+    }
+    return out;
+  }else{
+    std::vector<double> sum(J);
+    int i;
+    for(i=1; i<n; i+=2){
+      for(j=0; j<J; j++){
+        sum[j] += M2[i][j] - M1[i][j] + H[i][j];
+      }
+    }
+    NumericVector out(J);
+    NumericVector C = isPositive(delta1) - isPositive(delta2);
+    for(j=0; j<J; j++){
+      double C1 =
+        sf::owens_t(delta2[j]*sB2, a2) - sf::owens_t(delta1[j]*sB1, a1);
+      double C2 =
+        sf::owens_t(R[j], (a2*R[j]-delta2[j])/R[j]) -
+          sf::owens_t(R[j], (a1*R[j]-delta1[j])/R[j]);
+      double C3 =
+        sf::owens_t(delta2[j]*sB2, (delta2[j]*ab2-R[j])/b2/delta2[j]) -
+          sf::owens_t(delta1[j]*sB1, (delta1[j]*ab1-R[j])/b1/delta1[j]);
+      C[j] += 2*(C1 - C2 - C3);
+      out[j] = C[j] + 2*sum[j];
+    }
+    return out;
+  }
+}
+
 mp::float128 pnorm_mp(mp::float128 x){
   const mp::float128 sqrt2 = 1.4142135623730950488016887242096980785696718753769Q;
   return sf::erfc(-x / sqrt2)/2;
@@ -361,6 +497,7 @@ mp::float128 dnorm_mp(mp::float128 x){
   return mp::exp(-x*x/2)/2.5066282746310005024157652848110452530069867406099Q;
 }
 mp::float128 dnorm_mp(mp::float128 x); 
+
 // [[Rcpp::export]]
 double powen4(int nu, double t1, double t2, double delta1, double delta2){
   double C;
